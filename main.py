@@ -11,36 +11,25 @@ from langgraph.graph import (
 
 from graphs import (
     preparation_node,
-    profiling_node
+    profiling_node,
+    data_understanding_node
 )
 
 
 graph_builder = StateGraph(GraphState)
 
-graph_builder.add_node(
-    "preparation",
-    preparation_node.preparation_node
-)
+graph_builder.add_node("preparation",preparation_node.preparation_node)
 
-graph_builder.add_node(
-    "profiling",
-    profiling_node.profiling_node
-)
+graph_builder.add_node("profiling",profiling_node.profiling_node)
 
-graph_builder.add_edge(
-    START,
-    "preparation"
-)
+graph_builder.add_node("data_understanding_node", data_understanding_node.data_understanding_node)
 
-graph_builder.add_edge(
-    "preparation",
-    "profiling"
-)
 
-graph_builder.add_edge(
-    "profiling",
-    END
-)
+graph_builder.add_edge(START,"preparation")
+
+graph_builder.add_edge("preparation","profiling")
+
+graph_builder.add_edge("profiling", "data_understanding_node")
 
 graph = graph_builder.compile()
 
@@ -54,23 +43,13 @@ async def main():
         }
     )
 
-    print("\nDataset Shape:")
-    pprint(result["shape"])
-    
-    print("\nStatistical_summary:")
-    pprint(result["statistical_summary"]["age"])
+    print("\n========== FINAL GRAPH STATE ==========\n")
 
-    print("\nDtypes:")
-    pprint(result["dtypes"])
+    for key, value in result.items():
 
-    print("\nTop Rows:")
-    pprint(result["top_rows"])
+        print(f"\n--- {key.upper()} ---")
 
-    print("\nRaw Missing Values:")
-    pprint(result["raw_missing_summary"])
-
-    print("\nClean Missing Values:")
-    pprint(result["clean_missing_summary"])
+        pprint(value)
 
 
 if __name__ == "__main__":

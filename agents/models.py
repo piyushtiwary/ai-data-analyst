@@ -7,15 +7,14 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-google_model = init_chat_model(
-    model="gemini-2.5-flash",
-)
+# google_model = init_chat_model(
+#     model="gemini-2.5-flash",
+# )
 
 openai_model = model = init_chat_model("gpt-4o-mini")
 
 if __name__ == "__main__":
     
-
 	messages = [
 		(
 			"system",
