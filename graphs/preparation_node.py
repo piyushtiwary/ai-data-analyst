@@ -1,75 +1,71 @@
-from state import GraphState
+from states.root_state import RootState
 import pandas as pd
+import os
 
 
-async def preparation_node(state: GraphState):
-	
-	file_path = state['file_path']
-	
-	file_type = file_path.split(".")[-1]
-	
-	state['file_type'] = file_type
-	
-	raw_df = None
- 
-	# Check file type and load dataframe	
-	if file_type == 'csv':
-		raw_df = pd.read_csv(file_path)
-	elif file_type == 'json':
-		raw_df = pd.read_json(file_path)
-	elif file_type == 'xlsx':
-		raw_df = pd.read_excel(file_path)
-	
-	if raw_df is not None:
-		# Update raw data
-		state['raw_df'] = raw_df
-  
-		state['raw_missing_summary'] = (
-			raw_df.isnull()
-			.sum()
-			.to_dict()
-		)
+async def preparation_node(state: RootState):
 
+    data_state = state["data"]
 
-		clean_df = raw_df.copy()
+    file_path = data_state["file_path"]
 
-		# Normalize Column Names
-		clean_df.columns = [
-			col.strip().lower().replace(" ", "_")
-			for col in clean_df.columns
-		]
+    file_type = file_path.split(".")[-1].lower()
 
+    raw_df = None
 
-		# Remove Duplicate Rows
-		clean_df = clean_df.drop_duplicates()
-		
+    # Load dataframe
+    if file_type == "csv":
+        raw_df = pd.read_csv(file_path)
 
-		# 3. Remove Fully Empty Rows
-		clean_df = clean_df.dropna(how="all")
+    elif file_type == "json":
+        raw_df = pd.read_json(file_path)
 
+    elif file_type == "xlsx":
+        raw_df = pd.read_excel(file_path)
 
-		# Trim String Whitespace
-		for col in clean_df.select_dtypes(include="object").columns:
-			clean_df[col] = clean_df[col].astype(str).str.strip()
+    else:
+        raise ValueError(f"Unsupported file type: {file_type}")
 
-		
-		# Fill Missing Numeric Values
-		numeric_cols = clean_df.select_dtypes(include="number").columns
+    # Missing summary
+    raw_missing_summary = raw_df.isnull().sum().to_dict()
 
-		for col in numeric_cols:
-			clean_df[col] = clean_df[col].fillna(
-				clean_df[col].median()
-			)
+    # Cleaning
+    clean_df = raw_df.copy()
 
+    clean_df.columns = [
+        col.strip().lower().replace(" ", "_") for col in clean_df.columns
+    ]
 
-		# Fill Missing Categorical Values
-		categorical_cols = clean_df.select_dtypes(include="object").columns
+    clean_df = clean_df.drop_duplicates()
 
-		for col in categorical_cols:
-			clean_df[col] = clean_df[col].fillna("Unknown")
+    clean_df = clean_df.dropna(how="all")
 
+    for col in clean_df.select_dtypes(include="object").columns:
+        clean_df[col] = clean_df[col].astype(str).str.strip()
 
-		# Update State
-		state["clean_df"] = clean_df
+    numeric_cols = clean_df.select_dtypes(include="number").columns
 
-	return state
+    for col in numeric_cols:
+        clean_df[col] = clean_df[col].fillna(clean_df[col].median())
+
+    categorical_cols = clean_df.select_dtypes(include="object").columns
+
+    for col in categorical_cols:
+        clean_df[col] = clean_df[col].fillna("Unknown")
+
+    # Save cleaned dataset
+    os.makedirs("outputs", exist_ok=True)
+
+    clean_dataset_path = "outputs/clean_data.csv"
+
+    clean_df.to_csv(clean_dataset_path, index=False)
+
+    # Return ONLY updates
+    return {
+        "data": {
+            **data_state,
+            "file_type": file_type,
+            "clean_dataset_path": clean_dataset_path,
+            "raw_missing_summary": raw_missing_summary,
+        }
+    }

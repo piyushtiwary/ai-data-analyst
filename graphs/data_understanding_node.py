@@ -1,27 +1,40 @@
 from agents.dataset_understanding_agent import (
-    data_understanding_chain, DataUnderstandingOutput
+    data_understanding_chain,
+    DataUnderstandingOutput,
 )
+
 from typing import cast
 
-from state import GraphState
+from states.root_state import RootState
 
 
-async def data_understanding_node(
-    state: GraphState
-):
+async def data_understanding_node(state: RootState):
 
-    result = cast(DataUnderstandingOutput, await data_understanding_chain.ainvoke(
-        {
-            "shape": state["shape"],
-            "columns": state["columns"],
-            "dtypes": state["dtypes"],
-            "top_rows": state["top_rows"],
-            "bottom_rows": state["bottom_rows"],
-            "missing_values":
-                state["raw_missing_summary"],
-            "statistical_summary":
-                state["statistical_summary"]
-        }
-    ))
+    data_state = state["data"]
 
-    return result.model_dump()
+    result = cast(
+        DataUnderstandingOutput,
+        await data_understanding_chain.ainvoke(
+            {
+                "shape": data_state["shape"],
+                "columns": data_state["columns"],
+                "dtypes": data_state["dtypes"],
+                "top_rows": data_state["top_rows"],
+                "bottom_rows": data_state["bottom_rows"],
+                "missing_values": data_state["raw_missing_summary"],
+                "statistical_summary": data_state["statistical_summary"],
+            }
+        ),
+    )
+
+    # Convert pydantic output to dict
+    result_dict = result.model_dump()
+
+    # Merge into existing data state
+    updated_data_state = {
+        **data_state,
+        **result_dict,
+    }
+
+    # Return ONLY the updated section
+    return {"data": updated_data_state}
