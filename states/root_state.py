@@ -1,4 +1,4 @@
-from typing import TypedDict, Any, List, Dict, Tuple
+from typing import TypedDict, Any, List, Dict, Tuple, NotRequired
 
 from .data_state import DataState
 from .ml_state import MLState

@@ -1,14 +1,16 @@
-from langchain.tools import tool
+from __future__ import annotations
 
 import os
 import uuid
+from typing import Any, Dict
+
 import joblib
 import pandas as pd
 
-from xgboost import XGBClassifier
+from langchain.tools import tool
 
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.utils.class_weight import compute_sample_weight
 
 from .model_utils import (
     build_preprocessor,
@@ -16,38 +18,27 @@ from .model_utils import (
     split_dataset,
     undersample_training_data,
     compute_metrics,
-    normalize_feature_importance,
     compute_cv_scores,
 )
 
 
 @tool
-def train_xgboost_classifier_tool(
+def train_knn_tool(
     dataset_path: str,
     target_column: str,
     categorical_columns: list[str],
     numerical_columns: list[str],
     ordinal_columns: list[str] = [],
-    scaling_required: bool = False,
+    scaling_required: bool = True,
     imbalance_strategy: str = "none",
     cv_folds: int = 5,
     cv_repeats: int = 2,
     test_size: float = 0.2,
     random_state: int = 42,
-):
+) -> Dict[str, Any]:
     """
-    Train and evaluate an XGBoost classifier.
-
-    This tool:
-    - loads dataset from disk
-    - performs preprocessing
-    - trains XGBoost model
-    - evaluates performance
-    - saves trained pipeline
-    - returns experiment metadata
+    Train and evaluate a K-Nearest Neighbors classifier.
     """
-
-    # LOAD DATASET
     df = pd.read_csv(dataset_path)
 
     X_train, X_test, y_train, y_test = split_dataset(
@@ -58,8 +49,9 @@ def train_xgboost_classifier_tool(
     )
 
     applied_strategy = imbalance_strategy
-    if imbalance_strategy == "undersample":
+    if imbalance_strategy in {"undersample", "class_weight"}:
         X_train, y_train = undersample_training_data(X_train, y_train, random_state)
+        applied_strategy = "undersample"
 
     use_smote = imbalance_strategy == "smote"
 
@@ -71,20 +63,7 @@ def train_xgboost_classifier_tool(
         dense_output=use_smote,
     )
 
-    sample_weights = None
-    if imbalance_strategy == "class_weight":
-        sample_weights = compute_sample_weight(class_weight="balanced", y=y_train)
-
-    # MODEL
-    model = XGBClassifier(
-        n_estimators=200,
-        max_depth=6,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        eval_metric="logloss",
-        random_state=random_state,
-    )
+    model = KNeighborsClassifier(n_neighbors=7, weights="distance")
 
     if use_smote:
         pipeline = build_smote_pipeline(preprocessor, model, random_state)
@@ -97,11 +76,7 @@ def train_xgboost_classifier_tool(
             ]
         )
 
-        pipeline.fit(
-            X_train,
-            y_train,
-            model__sample_weight=sample_weights,
-        )
+        pipeline.fit(X_train, y_train)
 
     cv_stats = compute_cv_scores(
         pipeline,
@@ -113,44 +88,25 @@ def train_xgboost_classifier_tool(
     )
 
     predictions = pipeline.predict(X_test)
-
     probabilities = pipeline.predict_proba(X_test)[:, 1]
 
     metrics = compute_metrics(y_test, predictions, probabilities)
 
-    # FEATURE IMPORTANCE
-    booster = pipeline.named_steps["model"]
-
-    feature_names = pipeline.named_steps["preprocessor"].get_feature_names_out()
-
-    feature_importance = normalize_feature_importance(
-        feature_names.tolist(),
-        booster.feature_importances_.tolist(),
-    )
-
-    # SAVE MODEL
     os.makedirs("outputs/models", exist_ok=True)
-
     experiment_id = str(uuid.uuid4())[:8]
-
-    model_path = f"outputs/models/" f"xgboost_{experiment_id}.pkl"
-
+    model_path = f"outputs/models/knn_{experiment_id}.pkl"
     joblib.dump(pipeline, model_path)
 
-    # RETURN EXPERIMENT RESULT
     return {
         "experiment_id": experiment_id,
-        "model_name": "XGBoostClassifier",
+        "model_name": "KNeighborsClassifier",
         "model_path": model_path,
         "metrics": metrics,
-        "feature_importance": feature_importance,
+        "feature_importance": {},
         **cv_stats,
         "hyperparameters": {
-            "n_estimators": 200,
-            "max_depth": 6,
-            "learning_rate": 0.05,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
+            "n_neighbors": 7,
+            "weights": "distance",
             "imbalance_strategy": applied_strategy,
         },
     }

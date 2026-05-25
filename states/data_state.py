@@ -1,4 +1,5 @@
 from typing import TypedDict, Any, List, Dict, Tuple
+from typing_extensions import NotRequired
 
 
 class DataState(TypedDict):
@@ -20,6 +21,20 @@ class DataState(TypedDict):
     bottom_rows: List[Dict[Any, Any]]
 
     dataset_summary: str
+
+    business_domain: NotRequired[str]
+
+    recommended_tasks: NotRequired[list[str]]
+
+    selected_models: NotRequired[list[str]]
+
+    evaluation_metrics: NotRequired[list[str]]
+
+    encoding_strategy: NotRequired[list[Dict[str, str]]]
+
+    visualization_plan: NotRequired[list[str]]
+
+    scaling_required: NotRequired[bool]
 
     raw_missing_summary: Dict[Any, Any]
 
